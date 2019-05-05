@@ -11,6 +11,28 @@ const User = require('./models/user')
 
 app.use(bodyParser.json())
 
+const events = async eventIds => {
+    try {
+        const events = await Event.find({ _id: { $in: eventIds } });
+        return events.map(event => {
+            return { ...event._doc, _id: event.id, creator: user.bind(this, event.creator) };
+        });
+    }
+    catch (err) {
+        throw err;
+    }
+}
+
+const user = async userId => {
+    try {
+        const user = await User.findById(userId);
+        return { ...user._doc, _id: user.id, createdEvents: events.bind(this, user._doc.createdEvents) };
+    }
+    catch (err) {
+        throw err;
+    }
+}
+
 app.use('/graphql', graphqlHttp({
     schema: buildSchema(`
         type Event {
@@ -19,12 +41,14 @@ app.use('/graphql', graphqlHttp({
             description: String!
             price: Float!
             date: String!
+            creator: User!
         }
 
         type User {
             _id: ID!
             email: String!
             password: String
+            createdEvents: [Event!]
         }
 
         input UserInput {
@@ -58,7 +82,11 @@ app.use('/graphql', graphqlHttp({
             return Event.find()
                 .then(events => {
                     return events.map(event => {
-                        return { ...event._doc, _id: event.id }
+                        return {
+                            ...event._doc,
+                            _id: event.id,
+                            creator: user.bind(this, event._doc.creator)
+                        }
                     })
                 }).catch(err => {
                     throw err
@@ -76,10 +104,8 @@ app.use('/graphql', graphqlHttp({
             return event
                 .save()
                 .then((result) => {
-                    createdEvent = { ...result._doc, _id: result._doc._id.toString() }
+                    createdEvent = { ...result._doc, _id: result._doc._id.toString(), creator: user.bind(this, result._doc.creator) }
                     return User.findById('5ccdebb2eadda23648c8b7d7')
-                    // console.log(result)
-                    // return { ...result._doc, _id: result._doc._id }
                 })
                 .then(user => {
                     if (!user) {
@@ -88,7 +114,7 @@ app.use('/graphql', graphqlHttp({
                     user.createdEvents.push(event)
                     return user.save()
                 })
-                .then(result => {
+                .then(() => {
                     return createdEvent
                 })
                 .catch(err => {
